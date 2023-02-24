@@ -1,25 +1,39 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const XLSX = require('xlsx');
 
-const jobSites = [
-    { name: 'Indeed', url: 'https://www.indeed.com/jobs?q=software+developer&l=San+Francisco%2C+CA' },
-    { name: 'Glassdoor', url: 'https://www.glassdoor.com/Job/san-francisco-software-developer-jobs-SRCH_IL.0,13_IC1147401_KO14,32.htm' },
-    { name: 'LinkedIn', url: 'https://www.linkedin.com/jobs/software-developer-jobs-san-francisco-bay-area?trk=homepage-jobseeker_jobs-search-bar_search-submit&keywords=software%20developer&location=San%20Francisco%20Bay%20Area&position=1&pageNum=0' }
-];
+const urls = ['https://www.indeed.com/jobs?q=software+developer&l=United+States', 'https://www.monster.com/jobs/search/?q=software-developer&where=United-States'];
+const jobListings = [];
 
-async function getJobListings() {
-    for (let i = 0; i < jobSites.length; i++) {
-        const { name, url } = jobSites[i];
-        try {
-            const response = await axios.get(url);
-            const $ = cheerio.load(response.data);
-            const jobListings = $( /* selector for job listings */ );
-            console.log(`Job listings from ${name}: `, jobListings);
-        } catch (error) {
-            console.error(`Error retrieving job listings from ${name}: `, error);
-        }
-    }
+async function scrapeData() {
+  for (let url of urls) {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+
+    $('div.jobsearch-SerpJobCard').each((i, element) => {
+      const title = $(element).find('a').text().trim();
+      const company = $(element).find('span.company').text().trim();
+      const location = $(element).find('div.location').text().trim();
+      const link = $(element).find('a').attr('href');
+
+      jobListings.push({
+        title,
+        company,
+        location,
+        link,
+      });
+    });
+  }
+
+  // Print job listings in a table in the console
+  console.table(jobListings);
+
+  // Save job listings to an Excel sheet
+  const worksheet = XLSX.utils.json_to_sheet(jobListings);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Job Listings');
+  XLSX.writeFile(workbook, 'job_listings.xlsx');
 }
 
-// Run the function every 12 hours
-setInterval(getJobListings, 12 * 60 * 60 * 1000);
+// Run the scraper every 12 hours
+setInterval(scrapeData, 43200000);
